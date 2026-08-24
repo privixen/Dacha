@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Интерактивный план участка</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #1e1e24;
+      color: #f3f3f3;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #2b2b36;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #3d3d4e;
+      z-index: 10;
+    }
+    header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .header-btns {
+      display: flex;
+      gap: 6px;
+    }
+    button {
+      background: #4e6096;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    button:active {
+      background: #3c4c78;
+    }
+    button.danger {
+      background: #a84242;
+    }
+    button.success {
+      background: #3e8e58;
+    }
+    button.toggle-on {
+      background: #e5a93b;
+      color: #111;
+      font-weight: 600;
+    }
+    #viewport {
+      flex: 1;
+      position: relative;
+      touch-action: none;
+      background: #141418;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .toolbar {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(35, 35, 45, 0.92);
+      backdrop-filter: blur(8px);
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: calc(100% - 100px);
+      overflow-y: auto;
+      z-index: 5;
+    }
+    .toolbar-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #aaa;
+      margin-bottom: 2px;
+      font-weight: 700;
+    }
+    .item-btn {
+      background: #333342;
+      color: #ddd;
+      border: 1px solid #4a4a5e;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .item-btn:active {
+      background: #4a4a60;
+    }
+    .bottom-panel {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(35, 35, 45, 0.95);
+      backdrop-filter: blur(8px);
+      padding: 8px 14px;
+      border-radius: 20px;
+      border: 1px solid #444;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+      z-index: 5;
+      max-width: 95vw;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    #selected-info {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 48vw;
+    }
+    .edit-modal {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #2b2b36;
+      border: 1px solid #555;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      z-index: 20;
+      display: none;
+      width: 290px;
+    }
+    .edit-modal h3 {
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+    .form-group {
+      margin-bottom: 10px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      color: #aaa;
+      margin-bottom: 3px;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 6px 8px;
+      background: #1b1b22;
+      border: 1px solid #444;
+      border-radius: 5px;
+      color: white;
+      font-size: 13px;
+    }
+    .form-group-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .form-group-checkbox input {
+      width: auto;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 14px;
+    }
+    .violation-badge {
+      color: #ff5252;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Интерактивный план участка</h1>
+    <div class="header-btns">
+      <button id="btn-norms" class="toggle-on" onclick="toggleNorms()">🛡 Нормы: ВКЛ</button>
+      <button onclick="saveToStorage()" class="success">💾 Сохранить</button>
+      <button onclick="resetCamera()">🎯 Центр</button>
+      <button onclick="exportPNG()">📷 PNG</button>
+    </div>
+  </header>
+
+  <div id="viewport">
+    <canvas id="canvas"></canvas>
+
+    <div class="toolbar">
+      <div class="toolbar-title">Добавить объект</div>
+      <button class="item-btn" onclick="addNewObject('Дом', 'house', 10, 10, '#c25953')">🏠 Жилой дом 10×10</button>
+      <button class="item-btn" onclick="addNewObject('Септик', 'septic', 2, 2, '#4a6f9c', true)">💧 Септик</button>
+      <button class="item-btn" onclick="addNewObject('Хозблок', 'shed', 4, 3, '#966d4e')">🪵 Хозблок 4×3</button>
+      <button class="item-btn" onclick="addNewObject('Теплица', 'shed', 3, 6, '#4e8d96')">🌱 Теплица 3×6</button>
+      <button class="item-btn" onclick="addNewObject('Дерево', 'tree', 3, 3, '#3e7a44', true)">🌳 Дерево Ø3м</button>
+      <button class="item-btn" onclick="addNewObject('Грядка', 'garden', 1.2, 4, '#5b8c5a')">🥬 Грядка</button>
+    </div>
+
+    <div class="bottom-panel">
+      <span id="selected-info">Нажмите на любой объект для настройки</span>
+      <button id="lock-btn" style="display:none;" onclick="toggleSelectedLock()">🔒 Зафиксировать</button>
+      <button id="edit-btn" style="display:none;" onclick="openEditModal()">Свойства</button>
+      <button id="del-btn" style="display:none;" class="danger" onclick="deleteSelected()">Удалить</button>
+    </div>
+
+    <div id="editModal" class="edit-modal">
+      <h3>Параметры объекта</h3>
+      <div class="form-group">
+        <label>Название</label>
+        <input type="text" id="prop-name">
+      </div>
+      <div class="form-group">
+        <label>Тип нормы</label>
+        <select id="prop-type">
+          <option value="shed">Строение / Хозблок / Теплица (1м забор, 5м фасад)</option>
+          <option value="house">Жилой дом (3м забор, 5м фасад, 8м баня)</option>
+          <option value="banya">Баня (1м забор, 5м фасад, 8м дом)</option>
+          <option value="garage">Гараж (3м фасад/забор)</option>
+          <option value="septic">Септик (2м забор, 5м фасад/дом, 15м колодец)</option>
+          <option value="tree">Дерево (3м от ствола до забора)</option>
+          <option value="gate">Ворота / Проезд</option>
+          <option value="kolodets">Колодец (источник воды)</option>
+          <option value="garden">Посадки / Зона сада</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Ширина (м)</label>
+        <input type="number" step="0.1" id="prop-w">
+      </div>
+      <div class="form-group">
+        <label>Длина / Глубина (м)</label>
+        <input type="number" step="0.1" id="prop-h">
+      </div>
+      <div class="form-group">
+        <label>Угол поворота (°)</label>
+        <input type="number" step="5" id="prop-rot">
+      </div>
+      <div class="form-group-checkbox">
+        <input type="checkbox" id="prop-locked">
+        <label for="prop-locked">🔒 Заморозить (запретить перемещение)</label>
+      </div>
+      <div class="modal-actions">
+        <button onclick="closeEditModal()">Отмена</button>
+        <button class="success" onclick="applyEditModal()">Применить</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const viewport = document.getElementById('viewport');
+
+    let showNorms = true;
+    function toggleNorms() {
+      showNorms = !showNorms;
+      const btn = document.getElementById('btn-norms');
+      btn.textContent = showNorms ? '🛡 Нормы: ВКЛ' : '🛡 Нормы: ВЫКЛ';
+      btn.className = showNorms ? 'toggle-on' : '';
+      draw();
+    }
+
+    const rawD = { x: 15.4693, y: 8.8298 };
+    function toLocalCoord(pt) {
+      return { x: pt.x - rawD.x, y: pt.y - rawD.y };
+    }
+
+    const D = toLocalCoord(rawD);
+    const C = toLocalCoord({ x: 51.8704, y: 8.8298 });
+    const B = toLocalCoord({ x: 53.3275, y: 63.2881 });
+    const A = toLocalCoord({ x: 16.4252, y: 62.4667 });
+
+    const boundary = [D, C, B, A];
+    function getDist(p1, p2) { return Math.hypot(p1.x - p2.x, p1.y - p2.y); }
+
+    const distCD = getDist(C, D);
+    const distBC = getDist(B, C);
+    const distAB = getDist(A, B);
+    const distDA = getDist(D, A);
+
+    const plotCenter = {
+      x: (A.x + B.x + C.x + D.x) / 4,
+      y: (A.y + B.y + C.y + D.y) / 4
+    };
+
+    const NORMS = {
+      house:    { fenceSide: 3.0, fenceFront: 5.0, banyaDist: 8.0, septicDist: 5.0, kolodetsDist: 5.0, fromEdge: true },
+      banya:    { fenceSide: 1.0, fenceFront: 5.0, houseDist: 8.0, fromEdge: true },
+      garage:   { fenceSide: 3.0, fenceFront: 3.0, fromEdge: true },
+      septic:   { fenceSide: 2.0, fenceFront: 5.0, houseDist: 5.0, kolodetsDist: 15.0, fromEdge: true },
+      shed:     { fenceSide: 1.0, fenceFront: 5.0, fromEdge: true },
+      tree:     { fenceSide: 3.0, fenceFront: 3.0, houseDist: 5.0, fromEdge: false },
+      kolodets: { fenceSide: 0.0, fenceFront: 0.0, fromEdge: true },
+      gate:     { fenceSide: 0.0, fenceFront: 0.0, fromEdge: true },
+      garden:   { fenceSide: 0.0, fenceFront: 0.0, fromEdge: false }
+    };
+
+    // Столбы забора
+    const fencePosts = [];
+    function generateFencePosts() {
+      fencePosts.length = 0;
+      function placeSegment(startPt, endPt, step) {
+        const len = getDist(startPt, endPt);
+        const dx = (endPt.x - startPt.x) / len;
+        const dy = (endPt.y - startPt.y) / len;
+        fencePosts.push({ x: startPt.x, y: startPt.y, isCorner: true });
+        let dist = step;
+        while (dist < len - 0.05) {
+          fencePosts.push({ x: startPt.x + dx * dist, y: startPt.y + dy * dist, isCorner: false });
+          dist += step;
+        }
+      }
+      placeSegment(D, C, 5.76);
+      placeSegment(C, B, 5.76);
+      placeSegment(A, B, 5.76);
+      fencePosts.push({ x: B.x, y: B.y, isCorner: true });
+      const lenDA = getDist(D, A);
+      const dxDA = (A.x - D.x) / lenDA;
+      const dyDA = (A.y - D.y) / lenDA;
+      let distDA_step = 3.0;
+      while (distDA_step < lenDA - 0.05) {
+        fencePosts.push({ x: D.x + dxDA * distDA_step, y: D.y + dyDA * distDA_step, isCorner: false });
+        distDA_step += 3.0;
+      }
+    }
+    generateFencePosts();
+
+    // Базовые координаты зоны Сад
+    const gardenPolygonPts = [
+      toLocalCoord({ x: 16.4252, y: 62.4667 }),
+      toLocalCoord({ x: 33.7608, y: 62.8545 }),
+      toLocalCoord({ x: 33.5097, y: 48.7548 }),
+      toLocalCoord({ x: 16.1739, y: 48.3689 })
+    ];
+
+    const gardenCenter = {
+      x: gardenPolygonPts.reduce((s, p) => s + p.x, 0) / 4,
+      y: gardenPolygonPts.reduce((s, p) => s + p.y, 0) / 4
+    };
+
+    let defaultObjects = [
+      // Зона Сад (отрисовывается строго по своим 4 координатам)
+      {
+        id: 1,
+        name: 'Зона Сад (~17.3×14.1м)',
+        normType: 'garden',
+        x: gardenCenter.x,
+        y: gardenCenter.y,
+        pts: gardenPolygonPts,
+        w: 17.3,
+        h: 14.1,
+        rot: 0,
+        color: 'rgba(56, 142, 60, 0.22)',
+        isZone: true,
+        locked: true
+      },
+      // Баня
+      {
+        id: 2,
+        name: 'Баня',
+        normType: 'banya',
+        x: (toLocalCoord({ x: 40.8602, y: 32.7814 }).x + toLocalCoord({ x: 45.8099, y: 32.7313 }).x) / 2,
+        y: (toLocalCoord({ x: 40.8602, y: 32.7814 }).y + toLocalCoord({ x: 45.6225, y: 25.7238 }).y) / 2,
+        w: 5.0,
+        h: 7.0,
+        rot: 0,
+        color: '#966d4e',
+        locked: true
+      },
+      // Колодец
+      {
+        id: 3,
+        name: 'Колодец',
+        normType: 'kolodets',
+        x: (toLocalCoord({ x: 36.9331, y: 33.6712 }).x + toLocalCoord({ x: 39.0830, y: 33.6494 }).x) / 2,
+        y: (toLocalCoord({ x: 36.9331, y: 33.6712 }).y + toLocalCoord({ x: 39.0282, y: 31.6001 }).y) / 2,
+        w: 2.1,
+        h: 2.1,
+        rot: 0,
+        color: '#4a6f9c',
+        locked: true
+      },
+      // Гараж
+      {
+        id: 4,
+        name: 'Гараж',
+        normType: 'garage',
+        x: (toLocalCoord({ x: 18.5415, y: 15.8298 }).x + toLocalCoord({ x: 24.5415, y: 15.8298 }).x) / 2,
+        y: (toLocalCoord({ x: 18.5415, y: 15.8298 }).y + toLocalCoord({ x: 24.5415, y: 11.8298 }).y) / 2,
+        w: 6.0,
+        h: 4.0,
+        rot: 0,
+        color: '#707082',
+        locked: true
+      },
+      // Ворота
+      {
+        id: 5,
+        name: 'Ворота',
+        normType: 'gate',
+        x: (toLocalCoord({ x: 32.5093, y: 8.8898 }).x + toLocalCoord({ x: 38.5093, y: 8.8898 }).x) / 2,
+        y: toLocalCoord({ x: 32.5093, y: 8.8898 }).y + 0.3,
+        w: 6.0,
+        h: 0.6,
+        rot: 0,
+        color: '#ff5722',
+        locked: true
+      },
+      // Сарай
+      {
+        id: 101,
+        name: 'Сарай',
+        normType: 'shed',
+        x: 4.8,
+        y: 26.7,
+        w: 2.0,
+        h: 5.0,
+        rot: 0,
+        color: '#a07855',
+        locked: false
+      },
+      // Строение 4×6
+      {
+        id: 102,
+        name: 'Строение 4×6',
+        normType: 'shed',
+        x: 5.34,
+        y: 19.97,
+        w: 4.0,
+        h: 6.0,
+        rot: -1.5,
+        color: '#8d6e63',
+        locked: false
+      },
+      // Деревья сада
+      {
+        id: 201,
+        name: 'Место под яблоню',
+        normType: 'tree',
+        x: toLocalCoord({ x: 30.5584, y: 59.7795 }).x,
+        y: toLocalCoord({ x: 30.5584, y: 59.7795 }).y,
+        w: 3.0,
+        h: 3.0,
+        rot: 0,
+        color: '#43a047',
+        isCircle: true,
+        locked: false
+      },
+      {
+        id: 202,
+        name: 'Груша Чижовская',
+        normType: 'tree',
+        x: toLocalCoord({ x: 32.6717, y: 57.3301 }).x,
+        y: toLocalCoord({ x: 32.6717, y: 57.3301 }).y,
+        w: 3.0,
+        h: 3.0,
+        rot: 0,
+        color: '#2e7d32',
+        isCircle: true,
+        locked: false
+      },
+      {
+        id: 203,
+        name: 'Яблоня Антоновка',
+        normType: 'tree',
+        x: toLocalCoord({ x: 30.8090, y: 54.2852 }).x,
+        y: toLocalCoord({ x: 30.8090, y: 54.2852 }).y,
+        w: 3.0,
+        h: 3.0,
+        rot: 0,
+        color: '#388e3c',
+        isCircle: true,
+        locked: false
+      },
+      {
+        id: 204,
+        name: 'Груша Лада',
+        normType: 'tree',
+        x: toLocalCoord({ x: 32.8996, y: 52.3336 }).x,
+        y: toLocalCoord({ x: 32.8996, y: 52.3336 }).y,
+        w: 3.0,
+        h: 3.0,
+        rot: 0,
+        color: '#2e7d32',
+        isCircle: true,
+        locked: false
+      }
+    ];
+
+    let objects = [...defaultObjects];
+
+    let scale = 12;
+    let pan = { x: 0, y: 0 };
+
+    let selectedObj = null;
+    let isDraggingObj = false;
+    let dragOffset = { x: 0, y: 0 };
+
+    let isPanning = false;
+    let startPan = { x: 0, y: 0 };
+    let initialPinchDist = null;
+    let initialScale = scale;
+
+    function resize() {
+      canvas.width = viewport.clientWidth * window.devicePixelRatio;
+      canvas.height = viewport.clientHeight * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+      draw();
+    }
+    window.addEventListener('resize', resize);
+
+    function resetCamera() {
+      const w = viewport.clientWidth;
+      const h = viewport.clientHeight;
+      scale = Math.min(w / 48, h / 70);
+      pan.x = w / 2 - plotCenter.x * scale;
+      pan.y = h * 0.85;
+      draw();
+    }
+
+    function toScreen(pt) { return { x: pan.x + pt.x * scale, y: pan.y - pt.y * scale }; }
+    function toWorld(pt) { return { x: (pt.x - pan.x) / scale, y: (pan.y - pt.y) / scale }; }
+
+    function distToSegment(p, v, w) {
+      const l2 = (w.x - v.x) ** 2 + (w.y - v.y) ** 2;
+      if (l2 === 0) return getDist(p, v);
+      let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      return getDist(p, { x: v.x + t * (w.x - v.x), y: v.y + t * (w.y - v.y) });
+    }
+
+    function checkNorms(obj) {
+      const norm = NORMS[obj.normType || 'shed'];
+      if (!norm || obj.normType === 'garden' || obj.normType === 'gate') return { ok: true, violations: [] };
+
+      const violations = [];
+      const offset = norm.fromEdge ? (Math.max(obj.w, obj.h) / 2) : 0;
+
+      // 1. Отступ до фасада CD
+      const distFront = distToSegment(obj, D, C) - offset;
+      if (norm.fenceFront && distFront < norm.fenceFront - 0.05) {
+        violations.push(`Фасад CD: ${Math.max(0, distFront).toFixed(2)}м (норма $\ge${norm.fenceFront}$м)`);
+      }
+
+      // 2. Отступы до заборов
+      const distDA = distToSegment(obj, D, A) - offset;
+      const distAB = distToSegment(obj, A, B) - offset;
+      const distBC = distToSegment(obj, B, C) - offset;
+      const minSideFence = Math.min(distDA, distAB, distBC);
+
+      if (norm.fenceSide && minSideFence < norm.fenceSide - 0.05) {
+        violations.push(`Забор: ${Math.max(0, minSideFence).toFixed(2)}м (норма $\ge${norm.fenceSide}$м)`);
+      }
+
+      // 3. Септик <-> Колодец
+      if (obj.normType === 'septic') {
+        const kol = objects.find(o => o.normType === 'kolodets');
+        if (kol) {
+          const distKolodets = getDist(obj, kol);
+          if (distKolodets < 15.0) {
+            violations.push(`До колодца: ${distKolodets.toFixed(1)}м (норма $\ge15$м)`);
+          }
+        }
+      }
+
+      // 4. Дом <-> Баня
+      if (obj.normType === 'house') {
+        const ban = objects.find(o => o.normType === 'banya');
+        if (ban) {
+          const distBanya = getDist(obj, ban) - offset - Math.max(ban.w, ban.h) / 2;
+          if (distBanya < 8.0) {
+            violations.push(`До бани: ${Math.max(0, distBanya).toFixed(1)}м (норма $\ge8$м)`);
+          }
+        }
+      }
+
+      return { ok: violations.length === 0, violations };
+    }
+
+    function draw() {
+      const w = viewport.clientWidth;
+      const h = viewport.clientHeight;
+      ctx.clearRect(0, 0, w, h);
+
+      drawGrid();
+
+      // Участок
+      ctx.beginPath();
+      const pD = toScreen(D);
+      ctx.moveTo(pD.x, pD.y);
+      [C, B, A].forEach(p => { const sp = toScreen(p); ctx.lineTo(sp.x, sp.y); });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(76, 120, 74, 0.28)';
+      ctx.fill();
+      ctx.strokeStyle = '#5da859';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // CD (въезд)
+      const pC = toScreen(C);
+      ctx.beginPath();
+      ctx.moveTo(pD.x, pD.y);
+      ctx.lineTo(pC.x, pC.y);
+      ctx.strokeStyle = '#ffc83b';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // Зона колодца (15м)
+      if (showNorms) {
+        const kol = objects.find(o => o.normType === 'kolodets');
+        if (kol) {
+          ctx.save();
+          const scKol = toScreen(kol);
+          ctx.beginPath();
+          ctx.arc(scKol.x, scKol.y, 15 * scale, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(74, 111, 156, 0.08)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(74, 111, 156, 0.4)';
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(120, 170, 230, 0.8)';
+          ctx.font = '10px sans-serif';
+          ctx.fillText('Охранная зона колодца (R=15м)', scKol.x, scKol.y + 15 * scale + 12);
+          ctx.restore();
+        }
+      }
+
+      // Столбы забора
+      fencePosts.forEach(post => {
+        const sp = toScreen(post);
+        const postVisualSize = Math.max(4, 0.06 * scale);
+        ctx.save();
+        if (post.isCorner) {
+          ctx.fillStyle = '#ff5252';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.2;
+        } else {
+          ctx.fillStyle = '#e0e0e0';
+          ctx.strokeStyle = '#222222';
+          ctx.lineWidth = 1;
+        }
+        ctx.fillRect(sp.x - postVisualSize / 2, sp.y - postVisualSize / 2, postVisualSize, postVisualSize);
+        ctx.strokeRect(sp.x - postVisualSize / 2, sp.y - postVisualSize / 2, postVisualSize, postVisualSize);
+        ctx.restore();
+      });
+
+      drawPlotLabels();
+
+      // Отрисовка всех объектов
+      objects.forEach(obj => {
+        const normCheck = checkNorms(obj);
+        const norm = NORMS[obj.normType || 'shed'];
+
+        // Отрисовка буферной зоны норм (Halo)
+        if (showNorms && norm && norm.fenceSide > 0 && !obj.isZone) {
+          ctx.save();
+          const pos = toScreen(obj);
+          ctx.translate(pos.x, pos.y);
+          ctx.rotate((-obj.rot * Math.PI) / 180);
+
+          if (normCheck.ok) {
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.12)';
+            ctx.strokeStyle = 'rgba(76, 175, 80, 0.5)';
+          } else {
+            ctx.fillStyle = 'rgba(244, 67, 54, 0.22)';
+            ctx.strokeStyle = 'rgba(244, 67, 54, 0.8)';
+          }
+
+          ctx.setLineDash([4, 4]);
+          ctx.lineWidth = 1.2;
+
+          if (obj.normType === 'tree') {
+            const normRad = norm.fenceSide * scale;
+            ctx.beginPath();
+            ctx.arc(0, 0, normRad, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          } else if (obj.isCircle) {
+            const rw = (obj.w + norm.fenceSide * 2) * scale;
+            ctx.beginPath();
+            ctx.arc(0, 0, rw / 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          } else {
+            const rw = (obj.w + norm.fenceSide * 2) * scale;
+            const rh = (obj.h + norm.fenceSide * 2) * scale;
+            ctx.fillRect(-rw / 2, -rh / 2, rw, rh);
+            ctx.strokeRect(-rw / 2, -rh / 2, rw, rh);
+          }
+          ctx.restore();
+        }
+
+        // Если это полигональная зона (Сад)
+        if (obj.pts && obj.isZone) {
+          ctx.save();
+          ctx.beginPath();
+          const first = toScreen(obj.pts[0]);
+          ctx.moveTo(first.x, first.y);
+          for (let i = 1; i < obj.pts.length; i++) {
+            const sp = toScreen(obj.pts[i]);
+            ctx.lineTo(sp.x, sp.y);
+          }
+          ctx.closePath();
+          ctx.fillStyle = obj.color;
+          ctx.fill();
+
+          ctx.setLineDash([6, 4]);
+          ctx.strokeStyle = obj === selectedObj ? '#ffffff' : '#4caf50';
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
+
+          const scCenter = toScreen({ x: obj.x, y: obj.y });
+          const title = obj.locked ? `🔒 ${obj.name}` : obj.name;
+          ctx.fillStyle = '#a5d6a7';
+          ctx.font = 'italic bold 11px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(title, scCenter.x, scCenter.y);
+          ctx.restore();
+          return;
+        }
+
+        // Стандартное тело объекта
+        ctx.save();
+        const pos = toScreen(obj);
+        ctx.translate(pos.x, pos.y);
+        ctx.rotate((-obj.rot * Math.PI) / 180);
+
+        const rw = obj.w * scale;
+        const rh = obj.h * scale;
+
+        ctx.fillStyle = obj.color;
+
+        if (!normCheck.ok && showNorms) {
+          ctx.strokeStyle = '#ff3838';
+          ctx.lineWidth = 3;
+        } else if (obj === selectedObj) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.5;
+        } else if (obj.locked) {
+          ctx.strokeStyle = '#ffd54f';
+          ctx.lineWidth = 1.6;
+        } else {
+          ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+          ctx.lineWidth = 1;
+        }
+
+        if (obj.isCircle) {
+          ctx.beginPath();
+          ctx.arc(0, 0, rw / 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(2, rw / 6), 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0,0,0,0.35)';
+          ctx.fill();
+        } else {
+          ctx.fillRect(-rw / 2, -rh / 2, rw, rh);
+          ctx.strokeRect(-rw / 2, -rh / 2, rw, rh);
+        }
+
+        const title = obj.locked ? `🔒 ${obj.name}` : obj.name;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(title, 0, 0);
+
+        ctx.restore();
+      });
+    }
+
+    function drawGrid() {
+      const step = 5 * scale;
+      const subStep = 1 * scale;
+      ctx.strokeStyle = '#1d1d24'; ctx.lineWidth = 0.5;
+      for (let x = pan.x % subStep; x < viewport.clientWidth; x += subStep) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, viewport.clientHeight); ctx.stroke();
+      }
+      for (let y = pan.y % subStep; y < viewport.clientHeight; y += subStep) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(viewport.clientWidth, y); ctx.stroke();
+      }
+      ctx.strokeStyle = '#2b2b38'; ctx.lineWidth = 1;
+      for (let x = pan.x % step; x < viewport.clientWidth; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, viewport.clientHeight); ctx.stroke();
+      }
+      for (let y = pan.y % step; y < viewport.clientHeight; y += step) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(viewport.clientWidth, y); ctx.stroke();
+      }
+    }
+
+    function drawPlotLabels() {
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillStyle = '#fffae0';
+      const labels = [
+        { pt: D, text: 'D', off: { x: -18, y: 16 } },
+        { pt: C, text: 'C', off: { x: 8, y: 16 } },
+        { pt: B, text: 'B', off: { x: 10, y: -8 } },
+        { pt: A, text: 'A', off: { x: -18, y: -8 } }
+      ];
+      labels.forEach(l => {
+        const p = toScreen(l.pt);
+        ctx.fillText(l.text, p.x + l.off.x, p.y + l.off.y);
+      });
+
+      ctx.font = '11px sans-serif';
+      ctx.fillStyle = '#ffc83b';
+      const pCD = toScreen({ x: (C.x + D.x) / 2, y: (C.y + D.y) / 2 });
+      ctx.fillText(`CD: ${distCD.toFixed(2)} м (Фасад)`, pCD.x - 45, pCD.y + 18);
+
+      ctx.fillStyle = '#a9dfa7';
+      const pDA = toScreen({ x: (D.x + A.x) / 2, y: (D.y + A.y) / 2 });
+      ctx.fillText(`DA: ${distDA.toFixed(2)} м`, pDA.x - 65, pDA.y);
+
+      const pBC = toScreen({ x: (B.x + C.x) / 2, y: (B.y + C.y) / 2 });
+      ctx.fillText(`BC: ${distBC.toFixed(2)} м`, pBC.x + 8, pBC.y);
+
+      const pAB = toScreen({ x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 });
+      ctx.fillText(`AB: ${distAB.toFixed(2)} м`, pAB.x - 30, pAB.y - 12);
+    }
+
+    function getEventPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    function findObjectAt(screenPos) {
+      const worldPos = toWorld(screenPos);
+      for (let i = objects.length - 1; i >= 0; i--) {
+        const obj = objects[i];
+        if (obj.pts && obj.isZone) {
+          // Проверка попадания в полигон зоны
+          let inside = false;
+          for (let j = 0, k = obj.pts.length - 1; j < obj.pts.length; k = j++) {
+            const xi = obj.pts[j].x, yi = obj.pts[j].y;
+            const xj = obj.pts[k].x, yj = obj.pts[k].y;
+            const intersect = ((yi > worldPos.y) !== (yj > worldPos.y))
+                && (worldPos.x < (xj - xi) * (worldPos.y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+          }
+          if (inside) return obj;
+        } else {
+          const dx = worldPos.x - obj.x;
+          const dy = worldPos.y - obj.y;
+          if (Math.abs(dx) <= obj.w / 2 && Math.abs(dy) <= obj.h / 2) {
+            return obj;
+          }
+        }
+      }
+      return null;
+    }
+
+    function handlePointerDown(e) {
+      if (e.touches && e.touches.length === 2) {
+        isPanning = false;
+        isDraggingObj = false;
+        initialPinchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        initialScale = scale;
+        return;
+      }
+
+      const pos = getEventPos(e);
+      const clicked = findObjectAt(pos);
+
+      if (clicked) {
+        selectedObj = clicked;
+        if (!clicked.locked) {
+          isDraggingObj = true;
+          dragOffset = {
+            x: clicked.x - toWorld(pos).x,
+            y: clicked.y - toWorld(pos).y
+          };
+        } else {
+          isDraggingObj = false;
+        }
+        updateSelectionUI();
+      } else {
+        selectedObj = null;
+        updateSelectionUI();
+        isPanning = true;
+        startPan = { x: pos.x - pan.x, y: pos.y - pan.y };
+      }
+      draw();
+    }
+
+    function handlePointerMove(e) {
+      if (e.touches && e.touches.length === 2 && initialPinchDist) {
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        scale = Math.max(4, Math.min(50, initialScale * (dist / initialPinchDist)));
+        draw();
+        return;
+      }
+
+      const pos = getEventPos(e);
+
+      if (isDraggingObj && selectedObj && !selectedObj.locked) {
+        const wPos = toWorld(pos);
+        const newX = Math.round((wPos.x + dragOffset.x) * 2) / 2;
+        const newY = Math.round((wPos.y + dragOffset.y) * 2) / 2;
+        const dx = newX - selectedObj.x;
+        const dy = newY - selectedObj.y;
+        
+        selectedObj.x = newX;
+        selectedObj.y = newY;
+        
+        if (selectedObj.pts) {
+          selectedObj.pts = selectedObj.pts.map(p => ({ x: p.x + dx, y: p.y + dy }));
+        }
+
+        updateSelectionUI();
+        draw();
+      } else if (isPanning) {
+        pan.x = pos.x - startPan.x;
+        pan.y = pos.y - startPan.y;
+        draw();
+      }
+    }
+
+    function handlePointerUp() {
+      isDraggingObj = false;
+      isPanning = false;
+      initialPinchDist = null;
+    }
+
+    canvas.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('mousemove', handlePointerMove);
+    window.addEventListener('mouseup', handlePointerUp);
+
+    canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
+    window.addEventListener('touchmove', handlePointerMove, { passive: false });
+    window.addEventListener('touchend', handlePointerUp);
+
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const mousePos = getEventPos(e);
+      const worldPos = toWorld(mousePos);
+      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+      scale = Math.max(4, Math.min(50, scale * zoomFactor));
+      pan.x = mousePos.x - worldPos.x * scale;
+      pan.y = mousePos.y + worldPos.y * scale;
+      draw();
+    }, { passive: false });
+
+    function toggleSelectedLock() {
+      if (!selectedObj) return;
+      selectedObj.locked = !selectedObj.locked;
+      updateSelectionUI();
+      draw();
+    }
+
+    function updateSelectionUI() {
+      const info = document.getElementById('selected-info');
+      const lockBtn = document.getElementById('lock-btn');
+      const editBtn = document.getElementById('edit-btn');
+      const delBtn = document.getElementById('del-btn');
+
+      if (selectedObj) {
+        const normCheck = checkNorms(selectedObj);
+        const lockStatus = selectedObj.locked ? '🔒 (Заморожен)' : '';
+        if (normCheck.ok || !showNorms) {
+          info.innerHTML = `<b>${selectedObj.name}</b> ${lockStatus} | X=${selectedObj.x.toFixed(1)}м, Y=${selectedObj.y.toFixed(1)}м`;
+        } else {
+          info.innerHTML = `⚠️ <span class="violation-badge">Нарушение СП:</span> ${normCheck.violations.join('; ')}`;
+        }
+        
+        lockBtn.style.display = 'inline-block';
+        lockBtn.textContent = selectedObj.locked ? '🔓 Разморозить' : '🔒 Заморозить';
+        editBtn.style.display = 'inline-block';
+        delBtn.style.display = 'inline-block';
+      } else {
+        info.textContent = 'Нажмите на любой объект для настройки';
+        lockBtn.style.display = 'none';
+        editBtn.style.display = 'none';
+        delBtn.style.display = 'none';
+      }
+    }
+
+    function addNewObject(name, normType, w, h, color, isCircle = false) {
+      const obj = {
+        id: Date.now(),
+        name,
+        normType,
+        w,
+        h,
+        x: Math.round(plotCenter.x),
+        y: Math.round(plotCenter.y),
+        rot: 0,
+        color,
+        isCircle,
+        locked: false
+      };
+      objects.push(obj);
+      selectedObj = obj;
+      updateSelectionUI();
+      draw();
+    }
+
+    function deleteSelected() {
+      if (!selectedObj) return;
+      objects = objects.filter(o => o !== selectedObj);
+      selectedObj = null;
+      updateSelectionUI();
+      draw();
+    }
+
+    function openEditModal() {
+      if (!selectedObj) return;
+      document.getElementById('prop-name').value = selectedObj.name;
+      document.getElementById('prop-type').value = selectedObj.normType || 'shed';
+      document.getElementById('prop-w').value = selectedObj.w;
+      document.getElementById('prop-h').value = selectedObj.h;
+      document.getElementById('prop-rot').value = selectedObj.rot || 0;
+      document.getElementById('prop-locked').checked = !!selectedObj.locked;
+      document.getElementById('editModal').style.display = 'block';
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').style.display = 'none';
+    }
+
+    function applyEditModal() {
+      if (!selectedObj) return;
+      selectedObj.name = document.getElementById('prop-name').value;
+      selectedObj.normType = document.getElementById('prop-type').value;
+      selectedObj.w = parseFloat(document.getElementById('prop-w').value) || 1;
+      selectedObj.h = parseFloat(document.getElementById('prop-h').value) || 1;
+      selectedObj.rot = parseFloat(document.getElementById('prop-rot').value) || 0;
+      selectedObj.locked = document.getElementById('prop-locked').checked;
+      closeEditModal();
+      updateSelectionUI();
+      draw();
+    }
+
+    function saveToStorage() {
+      // Очищаем старые кэшированные данные со смещенной зоной сада
+      localStorage.setItem('plot_layout_data_v14', JSON.stringify(objects));
+      alert('План успешно сохранен в памяти устройства!');
+    }
+
+    function loadFromStorage() {
+      const data = localStorage.getItem('plot_layout_data_v14');
+      if (data) {
+        try { objects = JSON.parse(data); } catch (e) {}
+      }
+    }
+
+    function exportPNG() {
+      const link = document.createElement('a');
+      link.download = 'plot-plan.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    }
+
+    // При загрузке очищаем старые версии данных
+    loadFromStorage();
+    setTimeout(() => {
+      resize();
+      resetCamera();
+    }, 100);
+  </script>
+</body>
+</html>
