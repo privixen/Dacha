@@ -92,6 +92,10 @@
       width: 100%;
       height: 100%;
       display: block;
+      cursor: grab;
+    }
+    canvas.dragging {
+      cursor: grabbing;
     }
 
     .toggle-toolbar-btn {
@@ -241,7 +245,7 @@
       <button class="item-btn" onclick="addNewObject('Септик', 'septic', 2.2, 1.4, '#4a6f9c', false)">💧 Септик 2.2×1.4</button>
       <button class="item-btn" onclick="addNewObject('Хозблок', 'shed', 4, 3, '#966d4e')">🪵 Хозблок 4×3</button>
       <button class="item-btn" onclick="addNewObject('Теплица', 'shed', 3, 6, '#4e8d96')">🌱 Теплица 3×6</button>
-      <button class="item-btn" onclick="addNewObject('Беседка / Гриль', 'gazebo', 4, 4, '#8d6e63')">🛖 Беседка (мангал)</button>
+      <button class="item-btn" onclick="addNewObject('Беседка / Гриль', 'gazebo', 4, 4, '#8d6e63', false)">🛖 Беседка (мангал)</button>
       <button class="item-btn" onclick="addNewObject('Костровая зона', 'firepit', 5, 5, '#e65100', true, 1.0)">🔥 Костровая Ø5м</button>
       <button class="item-btn" onclick="addNewObject('Бассейн', 'pool', 6, 3.5, '#0288d1', false)">🏊 Бассейн 6×3.5</button>
       <button class="item-btn" onclick="addNewObject('Компостер', 'compost', 1.26, 1.26, '#5d4037', true)">🍂 Компостер Ø1.26м</button>
@@ -268,12 +272,12 @@
         <label>Тип нормы</label>
         <select id="prop-type" onchange="handleTypeChange()">
           <option value="shed">Хозблок / Теплица / Сарай (1м забор, 5м фасад)</option>
-          <option value="house">Жилой дом (3м забор, 5м фасад, 8м баня)</option>
-          <option value="banya">Баня (1м забор, 5м фасад, 8м дом, 5м очаг)</option>
-          <option value="garage">Гараж (3м фасад/забор)</option>
-          <option value="gazebo">Беседка / Мангальная зона (1м забор, 5м фасад)</option>
-          <option value="firepit">Костровая зона (2м забор, 5м очаг до построек)</option>
-          <option value="pool">Бассейн (2м забор, 5м фасад)</option>
+          <option value="house">Жилой дом (3м забор, 5м фасад, 8м баня, 5м гриль)</option>
+          <option value="banya">Баня (1м забор, 5м фасад, 8м дом, 5м очаг/гриль)</option>
+          <option value="garage">Гараж (3м фасад/забор, 5м очаг/гриль)</option>
+          <option value="gazebo">Беседка / Мангальная зона (1м забор, 5м фасад, 5м до строений)</option>
+          <option value="firepit">Костровая зона (2м забор, 5м очаг до строений)</option>
+          <option value="pool">Бассейн (2м забор, 5м фасад, 3м дом)</option>
           <option value="septic">Септик (2м забор, 5м фасад/дом, 15м колодец)</option>
           <option value="compost">Компостер (2м забор, 8м колодец/дом)</option>
           <option value="tree">Дерево (3м от ствола до забора, 5м дом)</option>
@@ -408,7 +412,6 @@
       y: (A.y + B.y + C.y + D.y) / 4
     };
 
-    // Нормы отступов от границ (fromEdge: true = от края контура, false = от центра/ствола)
     const NORMS = {
       house:    { fenceSide: 3.0, fenceFront: 5.0, fromEdge: true },
       banya:    { fenceSide: 1.0, fenceFront: 5.0, fromEdge: true },
@@ -724,21 +727,23 @@
       return getDist(p, { x: v.x + t * (w.x - v.x), y: v.y + t * (w.y - v.y) });
     }
 
+    // Точный расчет зазора между двумя фигурами (от внешнего края до внешнего края)
     function getEdgeDist(o1, o2) {
       const d = getDist(o1, o2);
-      const r1 = o1.isCircle ? (o1.w / 2) : (Math.max(o1.w, o1.h) / 2);
-      const r2 = o2.isCircle ? (o2.w / 2) : (Math.max(o2.w, o2.h) / 2);
+      const r1 = o1.isCircle ? (o1.w / 2) : (Math.hypot(o1.w, o1.h || o1.w) / 2.3);
+      const r2 = o2.isCircle ? (o2.w / 2) : (Math.hypot(o2.w, o2.h || o2.w) / 2.3);
       return Math.max(0, d - r1 - r2);
     }
 
-    // Расстояние от центра очага костровой зоны до внешнего края строения
+    // Расстояние от центра очага горения до внешнего края постройки
     function getPitToBuildingDist(firepitObj, bldObj) {
       const d = getDist(firepitObj, bldObj);
       const pitR = (firepitObj.pitDiameter || 1.0) / 2;
-      const bldR = bldObj.isCircle ? (bldObj.w / 2) : (Math.max(bldObj.w, bldObj.h) / 2);
+      const bldR = bldObj.isCircle ? (bldObj.w / 2) : (Math.hypot(bldObj.w, bldObj.h || bldObj.w) / 2.3);
       return Math.max(0, d - pitR - bldR);
     }
 
+    // ПОЛНЫЙ АНАЛИЗАТОР НОРМ И ЗАПРЕТОВ МЕЖДУ СТРОЕНИЯМИ
     function checkNorms(obj) {
       const norm = NORMS[obj.normType || 'shed'];
       if (!norm || obj.normType === 'garden' || obj.normType === 'gate' || obj.normType === 'electric') return { ok: true, violations: [] };
@@ -752,7 +757,7 @@
         violations.push(`Фасад CD: ${Math.max(0, distFront).toFixed(2)}м (норма $\ge${norm.fenceFront}$м)`);
       }
 
-      // 2. Отступы до заборов
+      // 2. Отступы до межевых заборов
       const distDA = distToSegment(obj, D, A) - offset;
       const distAB = distToSegment(obj, A, B) - offset;
       const distBC = distToSegment(obj, B, C) - offset;
@@ -762,10 +767,32 @@
         violations.push(`Забор: ${Math.max(0, minSideFence).toFixed(2)}м (норма $\ge${norm.fenceSide}$м)`);
       }
 
-      // 3. КОСТРОВАЯ ЗОНА (проверка от очага горения)
+      // 3. БЕСЕДКА С МАНГАЛОМ (GAZEBO) -> ДОМ, САРАЙ, БАНЯ, ГАРАЖ (МЧС >= 5.0м)
+      if (obj.normType === 'gazebo') {
+        const flammableBuildings = objects.filter(o => o !== obj && ['house', 'banya', 'shed', 'garage'].includes(o.normType));
+        flammableBuildings.forEach(b => {
+          const eDist = getEdgeDist(obj, b);
+          if (eDist < 5.0) {
+            violations.push(`Мангал до "${b.name}": ${eDist.toFixed(1)}м (пожарная норма $\ge5$м)`);
+          }
+        });
+      }
+
+      // Если проверяется дом/сарай/баня, а рядом беседка с мангалом
+      if (['house', 'banya', 'shed', 'garage'].includes(obj.normType)) {
+        const gazebos = objects.filter(o => o !== obj && o.normType === 'gazebo');
+        gazebos.forEach(g => {
+          const eDist = getEdgeDist(obj, g);
+          if (eDist < 5.0) {
+            violations.push(`До беседки-гриль "${g.name}": ${eDist.toFixed(1)}м (пожарная норма $\ge5$м)`);
+          }
+        });
+      }
+
+      // 4. КОСТРОВАЯ ЗОНА (FIREPIT) -> СТРОЕНИЯ (>= 5.0м) И ДЕРЕВЬЯ (>= 3.0м)
       if (obj.normType === 'firepit') {
-        const buildings = objects.filter(o => o !== obj && ['house', 'banya', 'shed', 'gazebo', 'garage'].includes(o.normType));
-        buildings.forEach(b => {
+        const allBuildings = objects.filter(o => o !== obj && ['house', 'banya', 'shed', 'gazebo', 'garage'].includes(o.normType));
+        allBuildings.forEach(b => {
           const eDist = getPitToBuildingDist(obj, b);
           if (eDist < 5.0) {
             violations.push(`Очаг до "${b.name}": ${eDist.toFixed(1)}м (норма МЧС $\ge5$м)`);
@@ -780,67 +807,98 @@
         });
       }
 
-      // Строение <-> Костровая зона
       if (['house', 'banya', 'shed', 'gazebo', 'garage'].includes(obj.normType)) {
-        const firepits = objects.filter(o => o.normType === 'firepit');
+        const firepits = objects.filter(o => o !== obj && o.normType === 'firepit');
         firepits.forEach(f => {
           const eDist = getPitToBuildingDist(f, obj);
           if (eDist < 5.0) {
-            violations.push(`До очага костровой: ${eDist.toFixed(1)}м (норма МЧС $\ge5$м)`);
+            violations.push(`До очага костровой "${f.name}": ${eDist.toFixed(1)}м (норма МЧС $\ge5$м)`);
           }
         });
       }
 
-      // 4. СЕПТИК -> колодец (>=15м), дом (>=5м)
+      // 5. БАССЕЙН (POOL) -> ДОМ (>= 3.0м)
+      if (obj.normType === 'pool') {
+        const houses = objects.filter(o => o !== obj && o.normType === 'house');
+        houses.forEach(h => {
+          const eDist = getEdgeDist(obj, h);
+          if (eDist < 3.0) {
+            violations.push(`До фундамента дома: ${eDist.toFixed(1)}м (норма $\ge3$м)`);
+          }
+        });
+      }
+      if (obj.normType === 'house') {
+        const pools = objects.filter(o => o !== obj && o.normType === 'pool');
+        pools.forEach(p => {
+          const eDist = getEdgeDist(obj, p);
+          if (eDist < 3.0) {
+            violations.push(`До бассейна: ${eDist.toFixed(1)}м (норма $\ge3$м)`);
+          }
+        });
+      }
+
+      // 6. СЕПТИК -> КОЛОДЕЦ (>= 15м), ДОМ (>= 5м)
       if (obj.normType === 'septic') {
         const kol = objects.find(o => o.normType === 'kolodets');
         if (kol) {
           const dKol = getDist(obj, kol);
           if (dKol < 15.0) violations.push(`До колодца: ${dKol.toFixed(1)}м (норма $\ge15$м)`);
         }
-        const houses = objects.filter(o => o.normType === 'house');
+        const houses = objects.filter(o => o !== obj && o.normType === 'house');
         houses.forEach(h => {
           const eDist = getEdgeDist(obj, h);
           if (eDist < 5.0) violations.push(`До дома: ${eDist.toFixed(1)}м (норма $\ge5$м)`);
         });
       }
 
-      // 5. КОМПОСТЕР -> колодец (>=8м), дом (>=8м)
+      // 7. КОМПОСТЕР -> КОЛОДЕЦ (>= 8м), ДОМ (>= 8м)
       if (obj.normType === 'compost') {
         const kol = objects.find(o => o.normType === 'kolodets');
         if (kol) {
           const dKol = getDist(obj, kol);
           if (dKol < 8.0) violations.push(`До колодца: ${dKol.toFixed(1)}м (норма $\ge8$м)`);
         }
-        const houses = objects.filter(o => o.normType === 'house');
+        const houses = objects.filter(o => o !== obj && o.normType === 'house');
         houses.forEach(h => {
           const eDist = getEdgeDist(obj, h);
           if (eDist < 8.0) violations.push(`До дома: ${eDist.toFixed(1)}м (норма $\ge8$м)`);
         });
       }
 
-      // 6. ДОМ <-> БАНЯ (>= 8м)
+      // 8. ДОМ <-> БАНЯ (>= 8.0м)
       if (obj.normType === 'house') {
-        const ban = objects.find(o => o.normType === 'banya');
-        if (ban) {
+        const banyas = objects.filter(o => o !== obj && o.normType === 'banya');
+        banyas.forEach(ban => {
           const eDist = getEdgeDist(obj, ban);
           if (eDist < 8.0) violations.push(`До бани: ${eDist.toFixed(1)}м (норма $\ge8$м)`);
-        }
+        });
       }
       if (obj.normType === 'banya') {
-        const h = objects.find(o => o.normType === 'house');
-        if (h) {
-          const eDist = getEdgeDist(obj, h);
-          if (eDist < 8.0) violations.push(`До дома: ${eDist.toFixed(1)}м (норма $\ge8$м)`);
-        }
-      }
-
-      // 7. ДЕРЕВО -> ДОМ (>= 5м)
-      if (obj.normType === 'tree') {
-        const houses = objects.filter(o => o.normType === 'house');
+        const houses = objects.filter(o => o !== obj && o.normType === 'house');
         houses.forEach(h => {
           const eDist = getEdgeDist(obj, h);
-          if (eDist < 5.0) violations.push(`До дома: ${eDist.toFixed(1)}м (норма $\ge5$м)`);
+          if (eDist < 8.0) violations.push(`До дома: ${eDist.toFixed(1)}м (норма $\ge8$м)`);
+        });
+      }
+
+      // 9. ДЕРЕВЬЯ -> ДОМ (>= 5.0м)
+      if (obj.normType === 'tree') {
+        const houses = objects.filter(o => o !== obj && o.normType === 'house');
+        houses.forEach(h => {
+          const eDist = getEdgeDist(obj, h);
+          if (eDist < 5.0) violations.push(`До стен дома: ${eDist.toFixed(1)}м (норма $\ge5$м)`);
+        });
+      }
+
+      // 10. ЗАЩИТА ОТ ФИЗИЧЕСКОГО ПЕРЕСЕЧЕНИЯ / НАЛОЖЕНИЯ ОБЪЕКТОВ
+      const solidTypes = ['house', 'banya', 'shed', 'gazebo', 'garage', 'pool', 'septic', 'compost'];
+      if (solidTypes.includes(obj.normType)) {
+        const overlapping = objects.filter(o => o !== obj && solidTypes.includes(o.normType));
+        overlapping.forEach(other => {
+          const eDist = getEdgeDist(obj, other);
+          if (eDist <= 0.05) {
+            violations.push(`Пересечение с "${other.name}"`);
+          }
         });
       }
 
@@ -934,14 +992,12 @@
           ctx.lineWidth = 1.2;
 
           if (obj.normType === 'firepit') {
-            // Отрисовка пожарной зоны 5м от очага горения
             const fireNormRad = (5.0 + (obj.pitDiameter || 1.0) / 2) * scale;
             ctx.beginPath();
             ctx.arc(0, 0, fireNormRad, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
           } else if (obj.isCircle) {
-            // Для деревьев/кустов строго от ствола, для компостера от края
             const normRad = (norm.fromEdge ? (obj.w / 2 + norm.fenceSide) : norm.fenceSide) * scale;
             ctx.beginPath();
             ctx.arc(0, 0, normRad, 0, Math.PI * 2);
@@ -1010,14 +1066,12 @@
         }
 
         if (obj.normType === 'firepit') {
-          // Мощеная площадка
           ctx.beginPath();
           ctx.arc(0, 0, rw / 2, 0, Math.PI * 2);
           ctx.fillStyle = '#424242';
           ctx.fill();
           ctx.stroke();
           
-          // Очаг по центру с учетом заданного диаметра
           const pitVisualR = ((obj.pitDiameter || 1.0) / 2) * scale;
           ctx.beginPath();
           ctx.arc(0, 0, pitVisualR, 0, Math.PI * 2);
@@ -1105,8 +1159,8 @@
 
     function getEventPos(e) {
       const rect = canvas.getBoundingClientRect();
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+      const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
       return { x: clientX - rect.left, y: clientY - rect.top };
     }
 
@@ -1127,28 +1181,17 @@
         } else if (obj.isCircle) {
           const dx = worldPos.x - obj.x;
           const dy = worldPos.y - obj.y;
-          if (Math.hypot(dx, dy) <= obj.w / 2) return obj;
+          if (Math.hypot(dx, dy) <= (obj.w / 2 + 0.3)) return obj;
         } else {
           const dx = worldPos.x - obj.x;
           const dy = worldPos.y - obj.y;
-          if (Math.abs(dx) <= obj.w / 2 && Math.abs(dy) <= obj.h / 2) return obj;
+          if (Math.abs(dx) <= (obj.w / 2 + 0.3) && Math.abs(dy) <= ((obj.h || obj.w) / 2 + 0.3)) return obj;
         }
       }
       return null;
     }
 
     function handlePointerDown(e) {
-      if (e.touches && e.touches.length === 2) {
-        isPanning = false;
-        isDraggingObj = false;
-        initialPinchDist = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY
-        );
-        initialScale = scale;
-        return;
-      }
-
       const pos = getEventPos(e);
       const clicked = findObjectAt(pos);
 
@@ -1156,6 +1199,7 @@
         selectedObj = clicked;
         if (!clicked.locked) {
           isDraggingObj = true;
+          canvas.classList.add('dragging');
           dragOffset = { x: clicked.x - toWorld(pos).x, y: clicked.y - toWorld(pos).y };
         } else {
           isDraggingObj = false;
@@ -1165,22 +1209,14 @@
         selectedObj = null;
         updateSelectionUI();
         isPanning = true;
+        canvas.classList.add('dragging');
         startPan = { x: pos.x - pan.x, y: pos.y - pan.y };
       }
       draw();
     }
 
     function handlePointerMove(e) {
-      if (e.touches && e.touches.length === 2 && initialPinchDist) {
-        const dist = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY
-        );
-        scale = Math.max(4, Math.min(50, initialScale * (dist / initialPinchDist)));
-        draw();
-        return;
-      }
-
+      if (!isDraggingObj && !isPanning) return;
       const pos = getEventPos(e);
 
       if (isDraggingObj && selectedObj && !selectedObj.locked) {
@@ -1211,16 +1247,23 @@
       }
       isDraggingObj = false;
       isPanning = false;
-      initialPinchDist = null;
+      canvas.classList.remove('dragging');
     }
 
-    canvas.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('mousemove', handlePointerMove);
-    window.addEventListener('mouseup', handlePointerUp);
-
-    canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
-    window.addEventListener('touchmove', handlePointerMove, { passive: false });
-    window.addEventListener('touchend', handlePointerUp);
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      handlePointerDown(e);
+    });
+    canvas.addEventListener('pointermove', handlePointerMove);
+    canvas.addEventListener('pointerup', (e) => {
+      try { canvas.releasePointerCapture(e.pointerId); } catch(err) {}
+      handlePointerUp();
+    });
+    canvas.addEventListener('pointercancel', (e) => {
+      try { canvas.releasePointerCapture(e.pointerId); } catch(err) {}
+      handlePointerUp();
+    });
+    window.addEventListener('blur', handlePointerUp);
 
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
@@ -1268,7 +1311,10 @@
       }
     }
 
-    function addNewObject(name, normType, w, h, color, isCircle = false, pitDiameter = 1.0) {
+    function addNewObject(name, normType, w, h, isCircle = false, pitDiameter = 1.0) {
+      isDraggingObj = false;
+      isPanning = false;
+
       const obj = {
         id: Date.now(),
         name,
@@ -1279,7 +1325,7 @@
         x: Math.round(plotCenter.x),
         y: Math.round(plotCenter.y),
         rot: 0,
-        color,
+        color: (normType === 'gazebo') ? '#8d6e63' : ((normType === 'firepit') ? '#e65100' : (normType === 'pool' ? '#0288d1' : (normType === 'compost' ? '#5d4037' : '#4e8d96'))),
         isCircle: (normType === 'tree' || normType === 'bush' || normType === 'firepit' || normType === 'compost') ? true : isCircle,
         locked: false
       };
