@@ -1024,7 +1024,7 @@
             ctx.fill();
             ctx.stroke();
           } else {
-            // ТОЧНЫЙ ПРЯМОУГОЛЬНЫЙ ОРЕОЛ С УЧЕТОМ РЕАЛЬНЫХ СТОРОН w И h
+            // ИСПРАВЛЕННЫЙ УНИВЕРСАЛЬНЫЙ ОРЕОЛ: учитывает поворот (rot) и пропорции здания (w и h)
             const rw = (obj.w + norm.fenceSide * 2) * scale;
             const rh = ((obj.h || obj.w) + norm.fenceSide * 2) * scale;
             ctx.fillRect(-rw / 2, -rh / 2, rw, rh);
@@ -1338,9 +1338,14 @@
       }
     }
 
+    // ИСПРАВЛЕННОЕ ДОБАВЛЕНИЕ НОВЫХ ОБЪЕКТОВ С СМЕЩЕНИЕМ (чтобы не застревали в центре)
     function addNewObject(name, normType, w, h, isCircle = false, pitDiameter = 1.0) {
       isDraggingObj = false;
       isPanning = false;
+
+      // Смещаем новый объект немного правее и выше центра, чтобы он не сливался со старыми объектами в центре
+      const offsetX = (Math.random() - 0.5) * 4;
+      const offsetY = (Math.random() - 0.5) * 4;
 
       const obj = {
         id: Date.now(),
@@ -1349,8 +1354,8 @@
         w,
         h: isCircle ? w : h,
         pitDiameter: (normType === 'firepit') ? pitDiameter : undefined,
-        x: Math.round(plotCenter.x),
-        y: Math.round(plotCenter.y),
+        x: Math.round((plotCenter.x + offsetX) * 2) / 2,
+        y: Math.round((plotCenter.y + offsetY) * 2) / 2,
         rot: 0,
         color: (normType === 'gazebo') ? '#8d6e63' : ((normType === 'firepit') ? '#e65100' : (normType === 'pool' ? '#0288d1' : (normType === 'compost' ? '#5d4037' : '#4e8d96'))),
         isCircle: (normType === 'tree' || normType === 'bush' || normType === 'firepit' || normType === 'compost') ? true : isCircle,
