@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Интерактивный план участка</title>
   <style>
     * {
@@ -23,15 +23,16 @@
     }
     header {
       background: #2b2b36;
-      padding: 10px 16px;
+      padding: 8px 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       border-bottom: 1px solid #3d3d4e;
       z-index: 10;
+      gap: 6px;
     }
     header h1 {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
@@ -39,27 +40,33 @@
     }
     .header-btns {
       display: flex;
-      gap: 6px;
+      gap: 5px;
       align-items: center;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
+    .header-btns::-webkit-scrollbar { display: none; }
     #sync-status {
       font-size: 11px;
       color: #81c784;
       font-weight: 500;
-      margin-right: 4px;
+      white-space: nowrap;
+      margin-right: 2px;
     }
     button {
       background: #4e6096;
       color: white;
       border: none;
       border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 12px;
+      padding: 6px 9px;
+      font-size: 11px;
       font-weight: 500;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 4px;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     button:active { background: #3c4c78; }
     button.danger { background: #a84242; }
@@ -67,53 +74,94 @@
     button.toggle-on { background: #e5a93b; color: #111; font-weight: 600; }
     #viewport { flex: 1; position: relative; touch-action: none; background: #141418; }
     canvas { width: 100%; height: 100%; display: block; }
+
+    /* Кнопка открытия/закрытия панели добавления */
+    .toggle-toolbar-btn {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 6;
+      background: #3e8e58;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.5);
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* Сворачиваемая плавающая панель объектов */
     .toolbar {
       position: absolute;
-      top: 12px;
-      left: 12px;
-      background: rgba(35, 35, 45, 0.92);
-      backdrop-filter: blur(8px);
+      top: 48px;
+      left: 10px;
+      background: rgba(30, 30, 40, 0.95);
+      backdrop-filter: blur(10px);
       padding: 8px;
-      border-radius: 8px;
-      border: 1px solid #444;
-      display: flex;
+      border-radius: 10px;
+      border: 1px solid #4a4a5e;
+      display: none; /* Скрыта по умолчанию на мобильных */
       flex-direction: column;
       gap: 6px;
-      max-height: calc(100% - 100px);
+      max-height: calc(100% - 130px);
       overflow-y: auto;
       z-index: 5;
+      width: 175px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
     }
-    .toolbar-title { font-size: 11px; text-transform: uppercase; color: #aaa; margin-bottom: 2px; font-weight: 700; }
+    .toolbar.open {
+      display: flex;
+    }
+    .toolbar-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: #aaa;
+      font-weight: 700;
+      margin-bottom: 2px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .toolbar-close {
+      cursor: pointer;
+      font-size: 14px;
+      color: #aaa;
+      padding: 0 4px;
+    }
     .item-btn {
-      background: #333342;
+      background: #2c2c3a;
       color: #ddd;
-      border: 1px solid #4a4a5e;
-      padding: 6px 10px;
+      border: 1px solid #444456;
+      padding: 7px 10px;
       border-radius: 6px;
-      font-size: 12px;
+      font-size: 11px;
       text-align: left;
       cursor: pointer;
     }
     .item-btn:active { background: #4a4a60; }
+
     .bottom-panel {
       position: absolute;
       bottom: 12px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(35, 35, 45, 0.95);
+      background: rgba(30, 30, 40, 0.95);
       backdrop-filter: blur(8px);
-      padding: 8px 14px;
+      padding: 7px 12px;
       border-radius: 20px;
       border: 1px solid #444;
       display: flex;
-      gap: 8px;
+      gap: 6px;
       align-items: center;
-      font-size: 12px;
+      font-size: 11px;
       z-index: 5;
-      max-width: 95vw;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      max-width: 94vw;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
-    #selected-info { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 48vw; }
+    #selected-info {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 44vw;
+    }
     .edit-modal {
       position: absolute;
       top: 50%;
@@ -128,7 +176,7 @@
       display: none;
       width: 290px;
     }
-    .edit-modal h3 { font-size: 15px; margin-bottom: 12px; }
+    .edit-modal h3 { font-size: 14px; margin-bottom: 12px; }
     .form-group { margin-bottom: 10px; }
     .form-group label { display: block; font-size: 11px; color: #aaa; margin-bottom: 3px; }
     .form-group input, .form-group select {
@@ -146,18 +194,18 @@
     .violation-badge { color: #ff5252; font-weight: 700; }
   </style>
 
-  <!-- Подключение Firebase SDK -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
   <header>
-    <h1>Интерактивный план участка</h1>
+    <h1>План участка</h1>
     <div class="header-btns">
       <span id="sync-status">🟢 Онлайн</span>
       <button onclick="saveToCloud(false)" class="success">💾 Сохранить</button>
-      <button id="btn-norms" class="toggle-on" onclick="toggleNorms()">🛡 Нормы: ВКЛ</button>
+      <button id="btn-norms" class="toggle-on" onclick="toggleNorms()">🛡 Нормы</button>
       <button onclick="resetCamera()">🎯 Центр</button>
       <button onclick="exportPNG()">📷 PNG</button>
     </div>
@@ -166,9 +214,16 @@
   <div id="viewport">
     <canvas id="canvas"></canvas>
 
-    <div class="toolbar">
-      <div class="toolbar-title">Добавить объект</div>
-      <button class="item-btn" onclick="addNewObject('Дом', 'house', 10, 10, '#c25953')">🏠 Жилой дом 10×10</button>
+    <!-- Кнопка вызова меню объектов -->
+    <button id="toggle-toolbar-btn" class="toggle-toolbar-btn" onclick="toggleToolbar()">➕ Добавить</button>
+
+    <!-- Сворачиваемая панель добавления -->
+    <div id="toolbar" class="toolbar">
+      <div class="toolbar-title">
+        <span>Объекты</span>
+        <span class="toolbar-close" onclick="toggleToolbar()">✕</span>
+      </div>
+      <button class="item-btn" onclick="addNewObject('Дом', 'house', 10, 10, '#c25953')">🏠 Дом 10×10</button>
       <button class="item-btn" onclick="addNewObject('Септик', 'septic', 2, 2, '#4a6f9c', true)">💧 Септик</button>
       <button class="item-btn" onclick="addNewObject('Хозблок', 'shed', 4, 3, '#966d4e')">🪵 Хозблок 4×3</button>
       <button class="item-btn" onclick="addNewObject('Теплица', 'shed', 3, 6, '#4e8d96')">🌱 Теплица 3×6</button>
@@ -177,8 +232,8 @@
     </div>
 
     <div class="bottom-panel">
-      <span id="selected-info">Нажмите на любой объект для настройки</span>
-      <button id="lock-btn" style="display:none;" onclick="toggleSelectedLock()">🔒 Зафиксировать</button>
+      <span id="selected-info">Нажмите на объект</span>
+      <button id="lock-btn" style="display:none;" onclick="toggleSelectedLock()">🔒 Замок</button>
       <button id="edit-btn" style="display:none;" onclick="openEditModal()">Свойства</button>
       <button id="del-btn" style="display:none;" class="danger" onclick="deleteSelected()">Удалить</button>
     </div>
@@ -192,7 +247,7 @@
       <div class="form-group">
         <label>Тип нормы</label>
         <select id="prop-type">
-          <option value="shed">Строение / Хозблок / Теплица (1м забор, 5м фасад)</option>
+          <option value="shed">Хозблок / Теплица / Сарай (1м забор, 5м фасад)</option>
           <option value="house">Жилой дом (3м забор, 5м фасад, 8м баня)</option>
           <option value="banya">Баня (1м забор, 5м фасад, 8м дом)</option>
           <option value="garage">Гараж (3м фасад/забор)</option>
@@ -227,7 +282,7 @@
   </div>
 
   <script>
-    // --- FIREBASE ИНИЦИАЛИЗАЦИЯ ---
+    // --- FIREBASE НАСТРОЙКИ ---
     const firebaseConfig = {
       apiKey: "AIzaSyByPwBOGW3hmP_tBfTKG4pjg49QkzfnuuA",
       authDomain: "dacha-plan.firebaseapp.com",
@@ -258,11 +313,20 @@
     const ctx = canvas.getContext('2d');
     const viewport = document.getElementById('viewport');
 
+    // Переключение видимости панели добавления
+    function toggleToolbar() {
+      const tb = document.getElementById('toolbar');
+      const btn = document.getElementById('toggle-toolbar-btn');
+      const isOpen = tb.classList.toggle('open');
+      btn.textContent = isOpen ? '✕ Закрыть' : '➕ Добавить';
+      btn.style.background = isOpen ? '#616175' : '#3e8e58';
+    }
+
     let showNorms = true;
     function toggleNorms() {
       showNorms = !showNorms;
       const btn = document.getElementById('btn-norms');
-      btn.textContent = showNorms ? '🛡 Нормы: ВКЛ' : '🛡 Нормы: ВЫКЛ';
+      btn.textContent = showNorms ? '🛡 Нормы' : '🛡 Нормы: ВЫКЛ';
       btn.className = showNorms ? 'toggle-on' : '';
       draw();
     }
@@ -506,27 +570,21 @@
     let initialPinchDist = null;
     let initialScale = scale;
 
-    // --- СОХРАНЕНИЕ В ОБЛАКО FIREBASE ---
     function saveToCloud(silent = false) {
       setSyncStatus(true);
       plotRef.set(objects)
         .then(() => {
           setSyncStatus(false);
-          if (!silent) {
-            alert('План успешно сохранен в базе данных Firebase!');
-          }
+          if (!silent) alert('План успешно сохранен в Firebase!');
         })
         .catch(err => {
           console.error("Ошибка Firebase:", err);
           syncStatusEl.textContent = '❌ Ошибка сети';
           syncStatusEl.style.color = '#ef5350';
-          if (!silent) {
-            alert('Ошибка при сохранении в базу данных: ' + err.message);
-          }
+          if (!silent) alert('Ошибка при сохранении: ' + err.message);
         });
     }
 
-    // Слушатель реального времени
     plotRef.on('value', (snapshot) => {
       const cloudData = snapshot.val();
       if (cloudData && Array.isArray(cloudData)) {
@@ -944,7 +1002,7 @@
 
     function handlePointerUp() {
       if (isDraggingObj) {
-        saveToCloud(true); // Тихое автосохранение при перемещении
+        saveToCloud(true);
       }
       isDraggingObj = false;
       isPanning = false;
@@ -1024,6 +1082,12 @@
       updateSelectionUI();
       draw();
       saveToCloud(true);
+      
+      // Сворачиваем меню после добавления на телефоне
+      const tb = document.getElementById('toolbar');
+      if (tb.classList.contains('open')) {
+        toggleToolbar();
+      }
     }
 
     function deleteSelected() {
