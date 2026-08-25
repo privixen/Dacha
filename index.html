@@ -647,7 +647,6 @@
     let isPanning = false;
     let startPan = { x: 0, y: 0 };
 
-    // Защита от undefined при сохранении в Firebase
     function saveToCloud(silent = false) {
       setSyncStatus(true);
       const cleanObjects = objects.map(obj => {
@@ -787,6 +786,7 @@
       return Math.max(0, d - pitR - bldR);
     }
 
+    // ПОЛНЫЙ ТОЧНЫЙ АНАЛИЗАТОР НОРМ С УЧЕТОМ МЧС (5М ДЛЯ БЕСЕДКИ И ОЧАГА)
     function checkNorms(obj) {
       const norm = NORMS[obj.normType || 'shed'];
       if (!norm || obj.normType === 'garden' || obj.normType === 'gate' || obj.normType === 'electric') return { ok: true, violations: [] };
@@ -807,6 +807,7 @@
         violations.push(`Забор: ${minSideFence.toFixed(2)}м (норма $\ge${norm.fenceSide}$м)`);
       }
 
+      // БЕСЕДКА С МАНГАЛОМ (GAZEBO) -> ДОМ, САРАЙ, БАНЯ, ГАРАЖ (МЧС >= 5.0м)
       if (obj.normType === 'gazebo') {
         const flammableBuildings = objects.filter(o => o !== obj && ['house', 'banya', 'shed', 'garage'].includes(o.normType));
         flammableBuildings.forEach(b => {
@@ -827,6 +828,7 @@
         });
       }
 
+      // КОСТРОВАЯ ЗОНА (FIREPIT)
       if (obj.normType === 'firepit') {
         const allBuildings = objects.filter(o => o !== obj && ['house', 'banya', 'shed', 'gazebo', 'garage'].includes(o.normType));
         allBuildings.forEach(b => {
@@ -1035,9 +1037,23 @@
             ctx.fill();
             ctx.stroke();
           } else {
-            // ИСПРАВЛЕННЫЙ ПРЯМОУГОЛЬНЫЙ ОРЕОЛ: учитывает пропорции здания w и h
-            const rw = (obj.w + norm.fenceSide * 2) * scale;
-            const rh = ((obj.h || obj.w) + norm.fenceSide * 2) * scale;
+            // Ореол с учетом забора + проверка противопожарной зоны 5м вокруг беседки
+            let extraSide = norm.fenceSide;
+            if (obj.normType === 'gazebo') {
+              // Если беседка ближе 5м к строениям, ореол расширяется до противопожарных 5м для наглядности
+              const flammableBuildings = objects.filter(o => o !== obj && ['house', 'banya', 'shed', 'garage'].includes(o.normType));
+              let minBuildingDist = Infinity;
+              flammableBuildings.forEach(b => {
+                const ed = getEdgeDist(obj, b);
+                if (ed < minBuildingDist) minBuildingDist = ed;
+              });
+              if (minBuildingDist < 5.0) {
+                extraSide = Math.max(norm.fenceSide, 5.0);
+              }
+            }
+
+            const rw = (obj.w + extraSide * 2) * scale;
+            const rh = ((obj.h || obj.w) + extraSide * 2) * scale;
             ctx.fillRect(-rw / 2, -rh / 2, rw, rh);
             ctx.strokeRect(-rw / 2, -rh / 2, rw, rh);
           }
