@@ -122,7 +122,7 @@
       max-height: calc(100% - 130px);
       overflow-y: auto;
       z-index: 5;
-      width: 175px;
+      width: 195px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.6);
     }
     .toolbar.open { display: flex; }
@@ -146,7 +146,7 @@
       background: #2c2c3a;
       color: #ddd;
       border: 1px solid #444456;
-      padding: 7px 10px;
+      padding: 6px 8px;
       border-radius: 6px;
       font-size: 11px;
       text-align: left;
@@ -238,10 +238,16 @@
         <span class="toolbar-close" onclick="toggleToolbar()">✕</span>
       </div>
       <button class="item-btn" onclick="addNewObject('Дом', 'house', 10, 10, '#c25953')">🏠 Дом 10×10</button>
-      <button class="item-btn" onclick="addNewObject('Септик', 'septic', 2, 2, '#4a6f9c', true)">💧 Септик</button>
+      <button class="item-btn" onclick="addNewObject('Септик', 'septic', 2.2, 1.4, '#4a6f9c', false)">💧 Септик 2.2×1.4</button>
       <button class="item-btn" onclick="addNewObject('Хозблок', 'shed', 4, 3, '#966d4e')">🪵 Хозблок 4×3</button>
       <button class="item-btn" onclick="addNewObject('Теплица', 'shed', 3, 6, '#4e8d96')">🌱 Теплица 3×6</button>
+      <button class="item-btn" onclick="addNewObject('Беседка / Гриль', 'gazebo', 4, 4, '#8d6e63')">🛖 Беседка (мангал)</button>
+      <button class="item-btn" onclick="addNewObject('Костровая зона', 'firepit', 5, 5, '#e65100', true)">🔥 Костровая Ø5м</button>
+      <button class="item-btn" onclick="addNewObject('Бассейн', 'pool', 6, 3.5, '#0288d1', false)">🏊 Бассейн 6×3.5</button>
+      <button class="item-btn" onclick="addNewObject('Эл. щиток', 'electric', 0.4, 0.3, '#fbc02d', false)">⚡ Эл. щиток на столбе</button>
+      <button class="item-btn" onclick="addNewObject('Компостер', 'compost', 1.2, 1.2, '#5d4037', false)">🍂 Компостер</button>
       <button class="item-btn" onclick="addNewObject('Дерево', 'tree', 3, 3, '#3e7a44', true)">🌳 Дерево Ø3м</button>
+      <button class="item-btn" onclick="addNewObject('Куст', 'bush', 1.5, 1.5, '#66bb6a', true)">🌿 Куст Ø1.5м</button>
       <button class="item-btn" onclick="addNewObject('Грядка', 'garden', 1.2, 4, '#5b8c5a')">🥬 Грядка</button>
     </div>
 
@@ -265,8 +271,14 @@
           <option value="house">Жилой дом (3м забор, 5м фасад, 8м баня)</option>
           <option value="banya">Баня (1м забор, 5м фасад, 8м дом)</option>
           <option value="garage">Гараж (3м фасад/забор)</option>
+          <option value="gazebo">Беседка / Мангальная зона (1м забор, 5м фасад)</option>
+          <option value="firepit">Костровая зона (2м забор, 5м до построек)</option>
+          <option value="pool">Бассейн (2м забор, 5м фасад)</option>
           <option value="septic">Септик (2м забор, 5м фасад/дом, 15м колодец)</option>
+          <option value="compost">Компостер (2м забор, 8м до колодца/дома)</option>
           <option value="tree">Дерево (3м от ствола до забора)</option>
+          <option value="bush">Куст (1м от центра до забора)</option>
+          <option value="electric">Эл. щиток / Столб</option>
           <option value="gate">Ворота / Проезд</option>
           <option value="kolodets">Колодец (источник воды)</option>
           <option value="garden">Посадки / Зона сада</option>
@@ -368,9 +380,15 @@
       house:    { fenceSide: 3.0, fenceFront: 5.0, banyaDist: 8.0, septicDist: 5.0, kolodetsDist: 5.0, fromEdge: true },
       banya:    { fenceSide: 1.0, fenceFront: 5.0, houseDist: 8.0, fromEdge: true },
       garage:   { fenceSide: 3.0, fenceFront: 3.0, fromEdge: true },
+      gazebo:   { fenceSide: 1.0, fenceFront: 5.0, fromEdge: true },
+      firepit:  { fenceSide: 2.0, fenceFront: 5.0, houseDist: 5.0, fromEdge: true },
+      pool:     { fenceSide: 2.0, fenceFront: 5.0, fromEdge: true },
       septic:   { fenceSide: 2.0, fenceFront: 5.0, houseDist: 5.0, kolodetsDist: 15.0, fromEdge: true },
+      compost:  { fenceSide: 2.0, fenceFront: 5.0, kolodetsDist: 8.0, fromEdge: true },
       shed:     { fenceSide: 1.0, fenceFront: 5.0, fromEdge: true },
       tree:     { fenceSide: 3.0, fenceFront: 3.0, houseDist: 5.0, fromEdge: false },
+      bush:     { fenceSide: 1.0, fenceFront: 1.0, fromEdge: false },
+      electric: { fenceSide: 0.0, fenceFront: 0.0, fromEdge: true },
       kolodets: { fenceSide: 0.0, fenceFront: 0.0, fromEdge: true },
       gate:     { fenceSide: 0.0, fenceFront: 0.0, fromEdge: true },
       garden:   { fenceSide: 0.0, fenceFront: 0.0, fromEdge: false }
@@ -505,6 +523,18 @@
         locked: false
       },
       {
+        id: 103,
+        name: 'Компостер',
+        normType: 'compost',
+        x: 3.5,
+        y: 33.0,
+        w: 1.2,
+        h: 1.2,
+        rot: 0,
+        color: '#5d4037',
+        locked: false
+      },
+      {
         id: 201,
         name: 'Место под яблоню',
         normType: 'tree',
@@ -600,7 +630,14 @@
     plotRef.on('value', (snapshot) => {
       const cloudData = snapshot.val();
       if (cloudData && Array.isArray(cloudData)) {
-        objects = cloudData;
+        objects = cloudData.map(o => {
+          if (o.normType === 'septic') {
+            o.isCircle = false;
+            if (!o.w) o.w = 2.2;
+            if (!o.h) o.h = 1.4;
+          }
+          return o;
+        });
         if (selectedObj) {
           selectedObj = objects.find(o => o.id === selectedObj.id) || null;
         }
@@ -641,7 +678,7 @@
 
     function checkNorms(obj) {
       const norm = NORMS[obj.normType || 'shed'];
-      if (!norm || obj.normType === 'garden' || obj.normType === 'gate') return { ok: true, violations: [] };
+      if (!norm || obj.normType === 'garden' || obj.normType === 'gate' || obj.normType === 'electric') return { ok: true, violations: [] };
 
       const violations = [];
       const offset = norm.fromEdge ? (Math.max(obj.w, obj.h) / 2) : 0;
@@ -660,17 +697,19 @@
         violations.push(`Забор: ${Math.max(0, minSideFence).toFixed(2)}м (норма $\ge${norm.fenceSide}$м)`);
       }
 
-      if (obj.normType === 'septic') {
+      if (obj.normType === 'septic' || obj.normType === 'compost') {
         const kol = objects.find(o => o.normType === 'kolodets');
+        const reqDist = norm.kolodetsDist || 15.0;
         if (kol) {
           const distKolodets = getDist(obj, kol);
-          if (distKolodets < 15.0) violations.push(`До колодца: ${distKolodets.toFixed(1)}м (норма $\ge15$м)`);
+          if (distKolodets < reqDist) violations.push(`До колодца: ${distKolodets.toFixed(1)}м (норма $\ge${reqDist}$м)`);
         }
       }
 
-      if (obj.normType === 'house') {
+      if (obj.normType === 'house' || obj.normType === 'firepit') {
         const ban = objects.find(o => o.normType === 'banya');
-        if (ban) {
+        const reqBanya = norm.houseDist || norm.banyaDist || 5.0;
+        if (ban && obj.normType === 'house') {
           const distBanya = getDist(obj, ban) - offset - Math.max(ban.w, ban.h) / 2;
           if (distBanya < 8.0) violations.push(`До бани: ${Math.max(0, distBanya).toFixed(1)}м (норма $\ge8$м)`);
         }
@@ -765,16 +804,10 @@
           ctx.setLineDash([4, 4]);
           ctx.lineWidth = 1.2;
 
-          if (obj.normType === 'tree') {
+          if (obj.isCircle) {
             const normRad = norm.fenceSide * scale;
             ctx.beginPath();
-            ctx.arc(0, 0, normRad, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-          } else if (obj.isCircle) {
-            const rw = (obj.w + norm.fenceSide * 2) * scale;
-            ctx.beginPath();
-            ctx.arc(0, 0, rw / 2, 0, Math.PI * 2);
+            ctx.arc(0, 0, (obj.w / 2 + norm.fenceSide) * scale, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
           } else {
@@ -839,16 +872,33 @@
           ctx.lineWidth = 1;
         }
 
-        if (obj.isCircle) {
+        if (obj.normType === 'firepit') {
+          // Отрисовка костровой площадки с очагом по центру
+          ctx.beginPath();
+          ctx.arc(0, 0, rw / 2, 0, Math.PI * 2);
+          ctx.fillStyle = '#424242';
+          ctx.fill();
+          ctx.stroke();
+          // Очаг
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(3, rw / 5), 0, Math.PI * 2);
+          ctx.fillStyle = '#ff6f00';
+          ctx.fill();
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        } else if (obj.isCircle) {
           ctx.beginPath();
           ctx.arc(0, 0, rw / 2, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
 
-          ctx.beginPath();
-          ctx.arc(0, 0, Math.max(2, rw / 6), 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(0,0,0,0.35)';
-          ctx.fill();
+          if (obj.normType === 'tree') {
+            ctx.beginPath();
+            ctx.arc(0, 0, Math.max(2, rw / 6), 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0,0,0,0.35)';
+            ctx.fill();
+          }
         } else {
           ctx.fillRect(-rw / 2, -rh / 2, rw, rh);
           ctx.strokeRect(-rw / 2, -rh / 2, rw, rh);
@@ -1086,7 +1136,7 @@
         y: Math.round(plotCenter.y),
         rot: 0,
         color,
-        isCircle,
+        isCircle: (normType === 'tree' || normType === 'bush' || normType === 'firepit') ? true : isCircle,
         locked: false
       };
       objects.push(obj);
@@ -1133,6 +1183,11 @@
       selectedObj.h = parseFloat(document.getElementById('prop-h').value) || 1;
       selectedObj.rot = parseFloat(document.getElementById('prop-rot').value) || 0;
       selectedObj.locked = document.getElementById('prop-locked').checked;
+      
+      if (selectedObj.normType === 'septic' || selectedObj.normType === 'pool') {
+        selectedObj.isCircle = false;
+      }
+      
       closeEditModal();
       updateSelectionUI();
       draw();
