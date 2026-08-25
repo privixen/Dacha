@@ -647,9 +647,20 @@
     let isPanning = false;
     let startPan = { x: 0, y: 0 };
 
+    // Защита от undefined при сохранении в Firebase
     function saveToCloud(silent = false) {
       setSyncStatus(true);
-      plotRef.set(objects)
+      const cleanObjects = objects.map(obj => {
+        const cleanObj = {};
+        for (let key in obj) {
+          if (obj[key] !== undefined) {
+            cleanObj[key] = obj[key];
+          }
+        }
+        return cleanObj;
+      });
+
+      plotRef.set(cleanObjects)
         .then(() => {
           setSyncStatus(false);
           if (!silent) alert('План успешно сохранен в Firebase!');
@@ -1024,7 +1035,7 @@
             ctx.fill();
             ctx.stroke();
           } else {
-            // ИСПРАВЛЕННЫЙ УНИВЕРСАЛЬНЫЙ ОРЕОЛ: учитывает поворот (rot) и пропорции здания (w и h)
+            // ИСПРАВЛЕННЫЙ ПРЯМОУГОЛЬНЫЙ ОРЕОЛ: учитывает пропорции здания w и h
             const rw = (obj.w + norm.fenceSide * 2) * scale;
             const rh = ((obj.h || obj.w) + norm.fenceSide * 2) * scale;
             ctx.fillRect(-rw / 2, -rh / 2, rw, rh);
@@ -1338,12 +1349,10 @@
       }
     }
 
-    // ИСПРАВЛЕННОЕ ДОБАВЛЕНИЕ НОВЫХ ОБЪЕКТОВ С СМЕЩЕНИЕМ (чтобы не застревали в центре)
     function addNewObject(name, normType, w, h, isCircle = false, pitDiameter = 1.0) {
       isDraggingObj = false;
       isPanning = false;
 
-      // Смещаем новый объект немного правее и выше центра, чтобы он не сливался со старыми объектами в центре
       const offsetX = (Math.random() - 0.5) * 4;
       const offsetY = (Math.random() - 0.5) * 4;
 
