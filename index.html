@@ -92,10 +92,7 @@
       width: 100%;
       height: 100%;
       display: block;
-      cursor: grab;
-    }
-    canvas.dragging {
-      cursor: grabbing;
+      cursor: default;
     }
 
     .toggle-toolbar-btn {
@@ -125,7 +122,7 @@
       gap: 6px;
       max-height: calc(100% - 130px);
       overflow-y: auto;
-      z-index: 5;
+      z-index: 10;
       width: 195px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.6);
     }
@@ -173,7 +170,7 @@
       gap: 6px;
       align-items: center;
       font-size: 11px;
-      z-index: 5;
+      z-index: 10;
       max-width: 94vw;
       box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
@@ -234,12 +231,12 @@
   <div id="viewport">
     <canvas id="canvas"></canvas>
 
-    <button id="toggle-toolbar-btn" class="toggle-toolbar-btn" onclick="toggleToolbar()">➕ Добавить</button>
+    <button id="toggle-toolbar-btn" class="toggle-toolbar-btn" onclick="toggleToolbar(event)">➕ Добавить</button>
 
     <div id="toolbar" class="toolbar">
       <div class="toolbar-title">
         <span>Объекты</span>
-        <span class="toolbar-close" onclick="toggleToolbar()">✕</span>
+        <span class="toolbar-close" onclick="toggleToolbar(event)">✕</span>
       </div>
       <button class="item-btn" onclick="addNewObject('Дом', 'house', 10, 10, '#c25953')">🏠 Дом 10×10</button>
       <button class="item-btn" onclick="addNewObject('Септик', 'septic', 2.2, 1.4, '#4a6f9c', false)">💧 Септик 2.2×1.4</button>
@@ -353,7 +350,8 @@
     const ctx = canvas.getContext('2d');
     const viewport = document.getElementById('viewport');
 
-    function toggleToolbar() {
+    function toggleToolbar(e) {
+      if (e) e.stopPropagation();
       const tb = document.getElementById('toolbar');
       const btn = document.getElementById('toggle-toolbar-btn');
       const isOpen = tb.classList.toggle('open');
@@ -646,8 +644,6 @@
     let dragOffset = { x: 0, y: 0 };
     let isPanning = false;
     let startPan = { x: 0, y: 0 };
-    let initialPinchDist = null;
-    let initialScale = scale;
 
     function saveToCloud(silent = false) {
       setSyncStatus(true);
@@ -727,44 +723,83 @@
       return getDist(p, { x: v.x + t * (w.x - v.x), y: v.y + t * (w.y - v.y) });
     }
 
-    // Точный расчет зазора между двумя фигурами (от внешнего края до внешнего края)
+    // Возвращает 4 угла объекта с учетом его поворота
+    function getObjectCorners(obj) {
+      const rad = (- (obj.rot || 0) * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const hw = obj.w / 2;
+      const hh = (obj.isCircle ? obj.w : (obj.h || obj.w)) / 2;
+      
+      const localCorners = [
+        { x: -hw, y: -hh },
+        { x: hw, y: -hh },
+        { x: hw, y: hh },
+        { x: -hw, y: hh }
+      ];
+      
+      return localCorners.map(c => ({
+        x: obj.x + (c.x * cos - c.y * sin),
+        y: obj.y + (c.x * sin + c.y * cos)
+      }));
+    }
+
+    // Точное минимальное расстояние от стенки объекта до отрезка забора
+    function getObjectDistToSegment(obj, p1, p2, norm) {
+      if (!norm.fromEdge || obj.normType === 'tree' || obj.normType === 'bush') {
+        // Для деревьев и кустов отступ считается строго от центра/ствола
+        return distToSegment(obj, p1, p2);
+      }
+      if (obj.isCircle) {
+        return Math.max(0, distToSegment(obj, p1, p2) - obj.w / 2);
+      }
+      
+      // Для прямоугольников проверяем все 4 угла
+      const corners = getObjectCorners(obj);
+      let minDist = Infinity;
+      corners.forEach(c => {
+        const d = distToSegment(c, p1, p2);
+        if (d < minDist) minDist = d;
+      });
+      return minDist;
+    }
+
+    // Точный расчет дистанции между двумя объектами
     function getEdgeDist(o1, o2) {
       const d = getDist(o1, o2);
-      const r1 = o1.isCircle ? (o1.w / 2) : (Math.hypot(o1.w, o1.h || o1.w) / 2.3);
-      const r2 = o2.isCircle ? (o2.w / 2) : (Math.hypot(o2.w, o2.h || o2.w) / 2.3);
+      const r1 = o1.isCircle ? (o1.w / 2) : (Math.min(o1.w, o1.h || o1.w) / 2);
+      const r2 = o2.isCircle ? (o2.w / 2) : (Math.min(o2.w, o2.h || o2.w) / 2);
       return Math.max(0, d - r1 - r2);
     }
 
-    // Расстояние от центра очага горения до внешнего края постройки
     function getPitToBuildingDist(firepitObj, bldObj) {
       const d = getDist(firepitObj, bldObj);
       const pitR = (firepitObj.pitDiameter || 1.0) / 2;
-      const bldR = bldObj.isCircle ? (bldObj.w / 2) : (Math.hypot(bldObj.w, bldObj.h || bldObj.w) / 2.3);
+      const bldR = bldObj.isCircle ? (bldObj.w / 2) : (Math.min(bldObj.w, bldObj.h || bldObj.w) / 2);
       return Math.max(0, d - pitR - bldR);
     }
 
-    // ПОЛНЫЙ АНАЛИЗАТОР НОРМ И ЗАПРЕТОВ МЕЖДУ СТРОЕНИЯМИ
+    // ПОЛНЫЙ ТОЧНЫЙ АНАЛИЗАТОР НОРМ
     function checkNorms(obj) {
       const norm = NORMS[obj.normType || 'shed'];
       if (!norm || obj.normType === 'garden' || obj.normType === 'gate' || obj.normType === 'electric') return { ok: true, violations: [] };
 
       const violations = [];
-      const offset = norm.fromEdge ? (obj.isCircle ? (obj.w / 2) : (Math.max(obj.w, obj.h) / 2)) : 0;
 
       // 1. Отступ до фасада CD
-      const distFront = distToSegment(obj, D, C) - offset;
+      const distFront = getObjectDistToSegment(obj, D, C, norm);
       if (norm.fenceFront && distFront < norm.fenceFront - 0.05) {
-        violations.push(`Фасад CD: ${Math.max(0, distFront).toFixed(2)}м (норма $\ge${norm.fenceFront}$м)`);
+        violations.push(`Фасад CD: ${distFront.toFixed(2)}м (норма $\ge${norm.fenceFront}$м)`);
       }
 
       // 2. Отступы до межевых заборов
-      const distDA = distToSegment(obj, D, A) - offset;
-      const distAB = distToSegment(obj, A, B) - offset;
-      const distBC = distToSegment(obj, B, C) - offset;
+      const distDA = getObjectDistToSegment(obj, D, A, norm);
+      const distAB = getObjectDistToSegment(obj, A, B, norm);
+      const distBC = getObjectDistToSegment(obj, B, C, norm);
       const minSideFence = Math.min(distDA, distAB, distBC);
 
       if (norm.fenceSide && minSideFence < norm.fenceSide - 0.05) {
-        violations.push(`Забор: ${Math.max(0, minSideFence).toFixed(2)}м (норма $\ge${norm.fenceSide}$м)`);
+        violations.push(`Забор: ${minSideFence.toFixed(2)}м (норма $\ge${norm.fenceSide}$м)`);
       }
 
       // 3. БЕСЕДКА С МАНГАЛОМ (GAZEBO) -> ДОМ, САРАЙ, БАНЯ, ГАРАЖ (МЧС >= 5.0м)
@@ -778,7 +813,6 @@
         });
       }
 
-      // Если проверяется дом/сарай/баня, а рядом беседка с мангалом
       if (['house', 'banya', 'shed', 'garage'].includes(obj.normType)) {
         const gazebos = objects.filter(o => o !== obj && o.normType === 'gazebo');
         gazebos.forEach(g => {
@@ -789,7 +823,7 @@
         });
       }
 
-      // 4. КОСТРОВАЯ ЗОНА (FIREPIT) -> СТРОЕНИЯ (>= 5.0м) И ДЕРЕВЬЯ (>= 3.0м)
+      // 4. КОСТРОВАЯ ЗОНА (FIREPIT)
       if (obj.normType === 'firepit') {
         const allBuildings = objects.filter(o => o !== obj && ['house', 'banya', 'shed', 'gazebo', 'garage'].includes(o.normType));
         allBuildings.forEach(b => {
@@ -817,7 +851,7 @@
         });
       }
 
-      // 5. БАССЕЙН (POOL) -> ДОМ (>= 3.0м)
+      // 5. БАССЕЙН -> ДОМ (>= 3.0м)
       if (obj.normType === 'pool') {
         const houses = objects.filter(o => o !== obj && o.normType === 'house');
         houses.forEach(h => {
@@ -844,7 +878,7 @@
           const dKol = getDist(obj, kol);
           if (dKol < 15.0) violations.push(`До колодца: ${dKol.toFixed(1)}м (норма $\ge15$м)`);
         }
-        const houses = objects.filter(o => o !== obj && o.normType === 'house');
+        const houses = objects.filter(o => o.normType === 'house');
         houses.forEach(h => {
           const eDist = getEdgeDist(obj, h);
           if (eDist < 5.0) violations.push(`До дома: ${eDist.toFixed(1)}м (норма $\ge5$м)`);
@@ -858,7 +892,7 @@
           const dKol = getDist(obj, kol);
           if (dKol < 8.0) violations.push(`До колодца: ${dKol.toFixed(1)}м (норма $\ge8$м)`);
         }
-        const houses = objects.filter(o => o !== obj && o.normType === 'house');
+        const houses = objects.filter(o => o.normType === 'house');
         houses.forEach(h => {
           const eDist = getEdgeDist(obj, h);
           if (eDist < 8.0) violations.push(`До дома: ${eDist.toFixed(1)}м (норма $\ge8$м)`);
@@ -890,7 +924,7 @@
         });
       }
 
-      // 10. ЗАЩИТА ОТ ФИЗИЧЕСКОГО ПЕРЕСЕЧЕНИЯ / НАЛОЖЕНИЯ ОБЪЕКТОВ
+      // 10. ЗАЩИТА ОТ ПЕРЕСЕЧЕНИЯ
       const solidTypes = ['house', 'banya', 'shed', 'gazebo', 'garage', 'pool', 'septic', 'compost'];
       if (solidTypes.includes(obj.normType)) {
         const overlapping = objects.filter(o => o !== obj && solidTypes.includes(o.normType));
@@ -1005,7 +1039,7 @@
             ctx.stroke();
           } else {
             const rw = (obj.w + norm.fenceSide * 2) * scale;
-            const rh = (obj.h + norm.fenceSide * 2) * scale;
+            const rh = ((obj.h || obj.w) + norm.fenceSide * 2) * scale;
             ctx.fillRect(-rw / 2, -rh / 2, rw, rh);
             ctx.strokeRect(-rw / 2, -rh / 2, rw, rh);
           }
@@ -1047,7 +1081,7 @@
         ctx.rotate((-obj.rot * Math.PI) / 180);
 
         const rw = obj.w * scale;
-        const rh = (obj.isCircle ? obj.w : obj.h) * scale;
+        const rh = (obj.isCircle ? obj.w : (obj.h || obj.w)) * scale;
 
         ctx.fillStyle = obj.color;
 
@@ -1192,6 +1226,8 @@
     }
 
     function handlePointerDown(e) {
+      if (e.target !== canvas) return;
+
       const pos = getEventPos(e);
       const clicked = findObjectAt(pos);
 
@@ -1199,7 +1235,6 @@
         selectedObj = clicked;
         if (!clicked.locked) {
           isDraggingObj = true;
-          canvas.classList.add('dragging');
           dragOffset = { x: clicked.x - toWorld(pos).x, y: clicked.y - toWorld(pos).y };
         } else {
           isDraggingObj = false;
@@ -1209,7 +1244,6 @@
         selectedObj = null;
         updateSelectionUI();
         isPanning = true;
-        canvas.classList.add('dragging');
         startPan = { x: pos.x - pan.x, y: pos.y - pan.y };
       }
       draw();
@@ -1247,23 +1281,17 @@
       }
       isDraggingObj = false;
       isPanning = false;
-      canvas.classList.remove('dragging');
     }
 
-    canvas.addEventListener('pointerdown', (e) => {
-      canvas.setPointerCapture(e.pointerId);
-      handlePointerDown(e);
-    });
-    canvas.addEventListener('pointermove', handlePointerMove);
-    canvas.addEventListener('pointerup', (e) => {
-      try { canvas.releasePointerCapture(e.pointerId); } catch(err) {}
-      handlePointerUp();
-    });
-    canvas.addEventListener('pointercancel', (e) => {
-      try { canvas.releasePointerCapture(e.pointerId); } catch(err) {}
-      handlePointerUp();
-    });
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
     window.addEventListener('blur', handlePointerUp);
+
+    document.getElementById('toolbar').addEventListener('pointerdown', e => e.stopPropagation());
+    document.getElementById('editModal').addEventListener('pointerdown', e => e.stopPropagation());
+    document.querySelector('.bottom-panel').addEventListener('pointerdown', e => e.stopPropagation());
 
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
